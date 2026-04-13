@@ -1,0 +1,20 @@
+# ============================================================
+# Step 1 / Step 2 Pipeline Configuration
+# ============================================================
+
+project:
+  root: ".."
+
+paths:
+  raw_root: "data/raw"
+  processed_root: "data/processed"
+
+runtime:
+  device: "cpu"
+  force: false
+
+workspace:
+  datasets:
+    - name: test_samples
+      input_rel: test_samples
+      output_rel: test_samples_output
