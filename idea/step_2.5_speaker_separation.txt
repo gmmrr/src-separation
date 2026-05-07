@@ -1,0 +1,51 @@
+接下來要建立一個 pipeline，輸入是已經只留下人的聲音，但可能包含多個人聲的單聲道音檔，以 .wav 檔儲存。
+輸出是多個已經被 extraxted 的單一位 speaker 的等長講話音檔。在所有輸出音檔中，都只有一位人士在說話，並且盡可能都是同一個人。
+首要目標是沒有多於一位的 speaker 在同一個時間點上講話，次要目標才是整段音檔都真的是同一人在講話。
+
+這個 pipeline 使用三個工具，第一個工具是 speaker diarization，第二個工具是 speaker extraction，第三個工具是 blind separation。
+第一個工具的目的是把整段音檔可以判斷在若干人數中，每一位特定 speaker 在哪一個時間段有說話。
+若同一個時間段有多於一人在講話， diarization 也需要可以判斷出多位 speaker 說話的時間片段。
+speaker diarization 目前是選用 EEND-EDA 作為模型，若符合容後介紹的 stage 1 中的目的，可以選用其他模型。
+第二個工具的目的是給定一個 reference speaker，使得從若干人數說話的音檔中，抽取出該特定人的聲音。
+首要目的是抽取出的聲音是真的只有一個人在說話，如果沒有足夠高的信心該片段某特定 speaker 有無說話，則不抽取。
+speaker extraction 目前是選用 USEF-TSE 作為模型，若符合容後介紹的 stage 1 中的目的，可以選用其他模型。
+第三個工具是給定一多於一人說話的片段，使得不需要 reference 就可以直接抽取出多人的片段。
+目前是選用 TF-GRIDNET 作為模型，該模型只能夠進行兩人的 speaker separation，所以會對 blind separation 的觸發條件進行限制，
+觸發條件會於下一節中說明，可以注意若有一模型可以進行多於二人的 speaker blind separation，則可以放寬該限制。
+
+這個 pipeline 分成兩個 stage，第一個部分是 recursive separation，第二個部分是 blind separation。
+第一個 stage 的目的是若有多於二位在講話，則先透過 diarization model 去判斷所有時間段中，每一位 speaker 的出現機率。
+因此，有可能 speaker A 有 0.9 的機率在講話，同時 speaker B 也有 0.9 的機率在講話，因為他們是在該時間段內同時在講話。
+但是，如果 speaker A 有 0.9 的機率在講話，且其他 speaker 在講話的機率遠低於 0.9，我們可以合理判斷真的只有 speaker A 在同一個時間點上講話。
+這也是我們在該階段感興趣的部分。如果超過特定秒數長度的片段只有單一位人次在說話，則作為候選的 reference speaker 片段，待 speaker extraction model 抽取。
+候選 reference 如何真正作為 reference 需要經過 reference purity check，
+大致上的精神是透過 diarization 對多段某一特定 speaker 有高信心是只有其在講話，將這些片段集合為一個檔案作為 reference speaker。
+例如 speaker A 有 0.9 的機率在說話，且其他 speaker 說話的機率低於0.1。
+細節上需要通過 reference purity check，需要判斷這些是不是有 embedding consistent，於是我們需要補充功能可以判斷 speaker embedding。
+透過這個 reference separation 的第一步，我們可以抽取出 reference speaker，並且將其作為作為 speaker extraction 的參考，以便抽取特定 speaker 說話內容。
+這一段抽取出來的音檔會經過filter，只有 diarization 判斷該時段該特定 speaker 有中高信心（暫定為 0.5）在說話的時間段會被儲存為其中一個輸出，
+且該輸出會從原始片段中消除去，其餘片段即便都是噪音，也要被加回剩餘片段。
+這樣做的目的是為了可以儘可能保留資訊，避免在多次 extraction 之後，越來越少資訊被保留。
+此處，除了儲存檔名包含 speaker ID 的音檔，也會整合到整個音檔共用的 json，內容是 segment-level metadata，包含是透過什麼方式取得的，以及 speaker ID。
+剩餘的音檔，可以再透過一樣的方式，透過 diarization 選出最適合當作 reference 的特定 speaker 的片段集合，進行 extraction。
+接下來，有三種情況會進入 blind separation，第一種情況是 diarization 判斷原始音檔或是剩餘音檔中只有兩人在說話，則直接進入 blind separation，跳過 recursive separation stage。
+第二種情況是 diarization 已經沒有足夠信心某一段時間，且該時間片段作為 reference 不夠長，只有某一特定 speaker 在說話，
+第三種情況是 diarization 有高度信心幾乎所有有人在說話的時間段中，同時有多位 speaker 在說話。
+blind separation 的功能是不透過 reference 直接抽取出多個單一 speaker 講話的片段，
+惟須注意目前使用的模型只能進行兩人的 blind separation， 所以若 diarization 判斷剩餘片段中，所有時間段同時都有多於二位在說話，沒有在說話的時候所有人也都沒有在說話，
+則不再進行處理，標示為 drop，儲存於獨立於輸出資料夾的資料夾，作為不需要的結果，並在 json 上標示為多於二人的 fully overlap 。
+有經過 blind separation 的結果會因為模型會將剩餘音檔分為兩音檔，並且兩音檔都是單一 speaker 在說話，因此不需要再考慮剩餘音檔。
+需要注意的是，每一次 diarization 完若判斷有一特定 speaker 的出現片段從頭到尾都沒有與他人重疊，
+則直接裁切出所有片段作為已經抽取的結果，同樣地沒說話的時間訊號是0，避免做不必要的 extraction。
+在整個過程中，如果 diarization 判斷有單一 speaker 的出現時段一直都小於特定秒數（暫定 2 秒），請不做任何裁切和抽取，
+直接把這個聲音留到最後，會再替這些時間的前後邊界做寬鬆處理，透過邊界較為模糊的方式去列出時間點，以保留更多發聲的資訊，
+此時，已經確定沒有任何片段長於該特定秒數，會再經過將這些較為寬鬆的時間片段進行 recursive separation 和 blind separation 去抽取、裁切出這些音檔。
+在最後，我們需要做 post-separation merging，透過 embedding 的相似度去判斷是否有需要合併的 speakers。
+如果相似度很低，則分為獨立的 speakers。如果相似度極高，則結合為一體。但如果有出現任何時間上的重疊，絕對分為獨立的 speakers。
+透過 json 的資料得知，如果 speaker 出現的時間非常短，極有可能只是與發出該聲音的 speaker 的有不同的 embeddings，例如 NVVs。
+此時，我們把它列為 NVV-Speaker，與有明確相對非常長的音檔稱為 Actual-Speaker 作為對比。
+基於時間上不可能有重疊的前提，我們可以透過比較 embeddings 去比較與多位 Actual-Speaker 與哪位較接近，並且結合。
+如果時間上與所有 Actual-Speakers 都有所重疊，則維持原狀。
+
+
+高 confidence 直接截取，不要抽取
