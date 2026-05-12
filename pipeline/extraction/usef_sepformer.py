@@ -7,7 +7,7 @@ It does not perform training or fine-tuning.
 
 Default demo inputs:
   - mix: data/raw/test_samples
-  - aux: data/test_usef_tse/IyLqUS7hRvo_std_vocals.wav
+  - aux: data/test_extraction/IyLqUS7hRvo_std_vocals.wav
 """
 
 from __future__ import annotations
@@ -30,8 +30,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_REPO_DIR = REPO_ROOT / "models/external_repos/USEF-TSE"
 DEFAULT_CHECKPOINT = REPO_ROOT / "models/checkpoints/usef_tse/ZBang_USEF-TSE/chkpt/USEF-SepFormer/wsj0-2mix/temp_best.pth.tar"
 DEFAULT_MIX = REPO_ROOT / "data/raw/test_samples"
-DEFAULT_AUX = REPO_ROOT / "data/test_usef_tse/IyLqUS7hRvo_std_vocals.wav"
-DEFAULT_OUTPUT_DIR = REPO_ROOT / "data/processed/usef_tse_demo"
+DEFAULT_AUX = REPO_ROOT / "data/test_extraction/IyLqUS7hRvo_std_vocals.wav"
+DEFAULT_OUTPUT_DIR = REPO_ROOT / "data/test_extraction/usef_sepformer"
 DEFAULT_SAMPLE_RATE = 8000
 SUPPORTED_AUDIO_SUFFIXES = {".wav", ".flac", ".mp3", ".m4a", ".ogg"}
 
@@ -336,7 +336,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         "--aux",
         type=Path,
         default=DEFAULT_AUX,
-        help="Auxiliary target-speaker reference audio file or directory. " "Default: data/test_usef_tse/IyLqUS7hRvo_std_vocals.wav",
+        help="Auxiliary target-speaker reference audio file or directory. " "Default: data/test_extraction/IyLqUS7hRvo_std_vocals.wav",
     )
     parser.add_argument(
         "--output-dir",
