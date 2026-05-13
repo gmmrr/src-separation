@@ -23,7 +23,7 @@ import numpy as np
 import soundfile as sf
 import torch
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 ESPnet_REPO_DIR = REPO_ROOT / "models/external_repos/espnet"
 TFGRIDNET_DIR = REPO_ROOT / "models/checkpoints/tfgridnet/yoshiki_wsj0_2mix_spatialized_enh_tfgridnet_waspaa2023_raw"
@@ -31,7 +31,7 @@ TFGRIDNET_TRAIN_CONFIG = TFGRIDNET_DIR / "exp/enh_train_enh_tfgridnet_waspaa2023
 TFGRIDNET_MODEL_FILE = TFGRIDNET_DIR / "exp/enh_train_enh_tfgridnet_waspaa2023_raw/25epoch.pth"
 
 DEFAULT_INPUT = REPO_ROOT / "data/test_blind_separation/IyLqUS7hRvo_std_vocals.wav"
-DEFAULT_OUTPUT_DIR = REPO_ROOT / "data/test_blind_separation/tfgridnet_outputs"
+DEFAULT_OUTPUT_DIR = REPO_ROOT / "data/test_blind_separation/tfgridnet"
 DEFAULT_SAMPLE_RATE = 8000
 SUPPORTED_AUDIO_SUFFIXES = {".wav", ".flac", ".mp3", ".m4a", ".ogg"}
 

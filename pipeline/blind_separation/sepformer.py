@@ -19,16 +19,16 @@ from typing import List, Optional
 
 import numpy as np
 import soundfile as sf
+import scipy.signal
 import torch
-import torchaudio
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 SEPFORMER_SOURCE = "speechbrain/sepformer-wsj02mix"
 SEPFORMER_SAVEDIR = REPO_ROOT / "models/checkpoints/speechbrain_sepformer_wsj02mix"
 
 DEFAULT_INPUT = REPO_ROOT / "data/test_blind_separation/IyLqUS7hRvo_std_vocals.wav"
-DEFAULT_OUTPUT_DIR = REPO_ROOT / "data/test_blind_separation/sepformer_outputs"
+DEFAULT_OUTPUT_DIR = REPO_ROOT / "data/test_blind_separation/sepformer"
 DEFAULT_SAMPLE_RATE = 8000
 SUPPORTED_AUDIO_SUFFIXES = {".wav", ".flac", ".mp3", ".m4a", ".ogg"}
 
@@ -54,15 +54,11 @@ def _collect_audio_files(path: Path) -> List[Path]:
 
 
 def _load_audio_mono(audio_path: Path, sample_rate: int) -> torch.Tensor:
-    wav, sr = torchaudio.load(str(audio_path))
-    wav = wav.to(torch.float32)
-    if wav.ndim != 2:
-        raise ValueError(f"Unsupported audio shape: {tuple(wav.shape)}")
-    if wav.shape[0] > 1:
-        wav = wav.mean(dim=0, keepdim=True)
+    wav, sr = sf.read(str(audio_path), always_2d=True, dtype="float32")
+    wav = wav.mean(axis=1)
     if sr != sample_rate:
-        wav = torchaudio.functional.resample(wav, sr, sample_rate)
-    return wav.squeeze(0)
+        wav = scipy.signal.resample_poly(wav, sample_rate, sr).astype(np.float32)
+    return torch.from_numpy(np.asarray(wav, dtype=np.float32).reshape(-1))
 
 
 def _load_sepformer(source: str, savedir: Path, device: str):
