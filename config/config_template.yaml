@@ -18,3 +18,28 @@ workspace:
     - name: test_samples
       input_rel: test_samples
       output_rel: test_samples_output
+
+models:
+  uvr_vocals:
+    onnx_path: "models/UVR-MDX-NET-Inst_3.onnx"
+
+  pyannote:
+    diarization_model: "models/hf/pyannote/speaker-diarization-3.1"
+    overlap_model: "models/hf/pyannote/overlapped-speech-detection"
+
+  speechbrain:
+    ecapa_dir: "models/hf/speechbrain_ecapa"
+
+  silero:
+    vad_dir: "models/hf/silero_vad"
+
+  usef_tse:
+    repo_dir: "models/external_repos/USEF-TSE"
+    checkpoint_dir: "models/checkpoints/usef_tse"
+
+  eend_eda:
+    repo_dir: "models/external_repos/EENDEDA_VIB"
+    checkpoint_dir: "models/checkpoints/eend_eda"
+
+  tfgridnet:
+    checkpoint_dir: "models/checkpoints/tfgridnet"
