@@ -16,13 +16,68 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import numpy as np
+import soundfile as sf
+import scipy.signal
 import torch
+import torchaudio
+
+if not hasattr(torchaudio, "AudioMetaData"):
+    class _AudioMetaData:
+        """Compatibility shim for pyannote.audio import-time type hints."""
+
+        def __init__(
+            self,
+            num_frames: int,
+            sample_rate: int,
+            num_channels: int = 1,
+            bits_per_sample: int = 16,
+            encoding: str = "PCM_S",
+        ) -> None:
+            self.num_frames = num_frames
+            self.sample_rate = sample_rate
+            self.num_channels = num_channels
+            self.bits_per_sample = bits_per_sample
+            self.encoding = encoding
+
+    torchaudio.AudioMetaData = _AudioMetaData  # type: ignore[attr-defined]
+
+if not hasattr(torchaudio, "list_audio_backends"):
+    torchaudio.list_audio_backends = lambda: ["soundfile"]  # type: ignore[attr-defined]
+
+if not hasattr(torchaudio, "info"):
+    def _torchaudio_info(audio_file, backend=None):
+        del backend
+        info = sf.info(str(audio_file))
+        return torchaudio.AudioMetaData(  # type: ignore[attr-defined]
+            num_frames=info.frames,
+            sample_rate=info.samplerate,
+            num_channels=info.channels,
+            bits_per_sample=16,
+            encoding="PCM_S",
+        )
+
+    torchaudio.info = _torchaudio_info  # type: ignore[attr-defined]
+
+
+def _register_safe_globals() -> None:
+    """Allow pyannote checkpoints to load under PyTorch 2.6+ weights_only mode."""
+    try:
+        from torch.serialization import add_safe_globals
+        from torch.torch_version import TorchVersion
+        from pyannote.audio.core.task import Problem, Resolution, Specifications
+
+        add_safe_globals([TorchVersion, Problem, Resolution, Specifications])
+    except Exception:
+        # Keep import/load working on older torch versions or if pyannote internals change.
+        pass
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 DEFAULT_INPUT = REPO_ROOT / "data/test_diarization/IyLqUS7hRvo_std_vocals.wav"
-DEFAULT_OUTPUT_DIR = REPO_ROOT / "data/test_diarization/pyannote_outputs"
+DEFAULT_OUTPUT_DIR = REPO_ROOT / "data/test_diarization/pyannote_speaker_diarization_3.1"
 DEFAULT_MODEL = "pyannote/speaker-diarization-3.1"
+DEFAULT_SAMPLE_RATE = 16000
 
 SUPPORTED_AUDIO_SUFFIXES = {".wav", ".flac", ".mp3", ".m4a", ".ogg"}
 
@@ -50,7 +105,31 @@ def _collect_audio_files(path: Path) -> List[Path]:
     )
 
 
+def _load_audio_in_memory(audio_path: Path, sample_rate: int = DEFAULT_SAMPLE_RATE) -> Dict[str, object]:
+    waveform, sr = sf.read(str(audio_path), always_2d=True, dtype="float32")
+    waveform = waveform.T
+
+    if sr != sample_rate:
+        resampled = []
+        for channel in waveform:
+            resampled.append(scipy.signal.resample_poly(channel, sample_rate, sr).astype(np.float32))
+        max_len = max((len(channel) for channel in resampled), default=0)
+        waveform = np.stack(
+            [np.pad(channel, (0, max_len - len(channel)), mode="constant") for channel in resampled],
+            axis=0,
+        )
+
+    if waveform.shape[0] > 1:
+        waveform = waveform[:1]
+
+    return {
+        "waveform": torch.from_numpy(np.asarray(waveform, dtype=np.float32)),
+        "sample_rate": sample_rate,
+    }
+
+
 def _load_pyannote_pipeline(model_name: str, token: Optional[str], device: str):
+    _register_safe_globals()
     from pyannote.audio import Pipeline
 
     if not token:
@@ -158,7 +237,7 @@ def diarize_single(
         if max_speakers is not None:
             kwargs["max_speakers"] = max_speakers
 
-    diarization = pipeline(str(input_path), **kwargs)
+    diarization = pipeline(_load_audio_in_memory(input_path), **kwargs)
 
     segments = _annotation_to_segments(diarization)
     overlaps = _find_overlaps(segments)

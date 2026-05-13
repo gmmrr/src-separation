@@ -24,7 +24,7 @@ import torch
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 DEFAULT_INPUT = REPO_ROOT / "data/test_diarization/IyLqUS7hRvo_std_vocals.wav"
-DEFAULT_OUTPUT_DIR = REPO_ROOT / "data/test_diarization/sortformer_outputs"
+DEFAULT_OUTPUT_DIR = REPO_ROOT / "data/test_diarization/sortformer"
 DEFAULT_MODEL = "nvidia/diar_sortformer_4spk-v1"
 DEFAULT_SAMPLE_RATE = 16000
 
@@ -155,9 +155,9 @@ def _parse_segment(item) -> Optional[Dict]:
 
     return {
         "speaker": speaker,
-        "start": _fmt_seconds(start),
-        "end": _fmt_seconds(end),
-        "duration": _fmt_seconds(end - start),
+        "start": round(start, 2),
+        "end": round(end, 2),
+        "duration": round(end - start, 2),
     }
 
 
@@ -204,9 +204,9 @@ def _find_overlaps(segments: Sequence[Dict]) -> List[Dict]:
         if previous_time is not None and time > previous_time and len(active) >= 2:
             overlaps.append(
                 {
-                    "start": _fmt_seconds(previous_time),
-                    "end": _fmt_seconds(time),
-                    "duration": _fmt_seconds(time - previous_time),
+                    "start": round(previous_time, 2),
+                    "end": round(time, 2),
+                    "duration": round(time - previous_time, 2),
                     "speakers": sorted(active),
                     "num_speakers": len(active),
                 }
